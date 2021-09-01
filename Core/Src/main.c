@@ -24,6 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -58,7 +59,7 @@ const osMessageQueueAttr_t RxQueue_attributes = {
 /* USER CODE BEGIN PV */
 
 uint8_t rx_char;
-uint8_t tx_ok = 1;
+bool tx_ok = false;
 
 /* USER CODE END PV */
 
@@ -308,7 +309,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if (huart->Instance == USART2)
 	{
-		tx_ok = 1;
+		tx_ok = true;
 
 	}
 }
@@ -327,72 +328,85 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 void StartUARTRx(void *argument)
 {
   /* USER CODE BEGIN 5 */
-  uint8_t temp_rx;
+  uint8_t temp_rx[2] = { '\0' };
   char rx_msg[13] = { '\0' };
-  int rx_inc = 0;
+  size_t str_sp = 0;
   osStatus_t status;
+  bool send = false;
   /* Infinite loop */
   for(;;)
   {
-    status = osMessageQueueGet(RxQueueHandle, &temp_rx, NULL, 500);
+    status = osMessageQueueGet(RxQueueHandle, temp_rx, NULL, 500);
 
     if (status == osOK)
     {
-    	if (rx_inc <11)
-    	    {
-    	    	rx_msg[rx_inc] = (char)temp_rx;
-
-    	    }
-
-    	else
-    	    {
-    	    	rx_msg[11] = '\0';
-    	    	rx_msg[10] = '\r';
-    	    	rx_inc = 10;
-
-    	    }
-    }
-
-    else if (status == osErrorTimeout && strlen(rx_msg) > 0)
-    {
-    	if (rx_inc < 11) {
-    		rx_msg[rx_inc] = '\r';
-    		rx_msg[rx_inc+1] = '\0';
-
-    	}
-
-    	else
-    	{
-	    	rx_msg[11] = '\0';
-	    	rx_msg[10] = '\r';
-	    	rx_inc = 10;
-    	}
+    	str_sp = sizeof(rx_msg) - strlen(rx_msg) - 1;
+    	strncat(rx_msg, (char *)temp_rx, str_sp);
 
     }
 
+    str_sp = sizeof(rx_msg) - strlen(rx_msg) - 1;
 
-
-    if ((rx_msg[rx_inc] == '\r') || (rx_msg[rx_inc] == '\n'))
+    if (str_sp == 0)
     {
+    	rx_msg[strlen(rx_msg)-1] = '\r';
+    	rx_msg[strlen(rx_msg)-2] = '\n';
+    	send = true;
 
-    	strcat(rx_msg, "\n");
-    	HAL_UART_Transmit_IT(&huart2, (uint8_t *)rx_msg, rx_inc+2);
-    	rx_inc = 0;
-    	while (tx_ok != 1)
-    	{
-    		osDelay(10);
+    }
 
-    	}
+    else if (status == osErrorTimeout && strlen(rx_msg) > 0 && str_sp >= 2)
+    {
+    	strncat(rx_msg, "\n\r", str_sp);
+    	str_sp = sizeof(rx_msg) - strlen(rx_msg) - 1;
+    	send = true;
 
-    	tx_ok = 0;
+    }
+
+    else if (status == osErrorTimeout && strlen(rx_msg) > 0 && str_sp == 1)
+    {
+    	strncat(rx_msg, "\r", str_sp);
+    	rx_msg[strlen(rx_msg)-2] = '\n';
+    	str_sp = sizeof(rx_msg) - strlen(rx_msg) - 1;
+    	send = true;
+
+    }
+
+    else if (rx_msg[strlen(rx_msg)-1] == '\n' || rx_msg[strlen(rx_msg)-1] == '\r')
+    {
+    	rx_msg[strlen(rx_msg)-1] = '\n';
+    	strncat(rx_msg, "\r", str_sp);
+    	str_sp = sizeof(rx_msg) - strlen(rx_msg) - 1;
+    	send = true;
+
+    }
+
+    if (send)
+    {
+    	HAL_UART_Transmit_IT(&huart2, (uint8_t *)"Received command:\n\r", 19);
+
+    	while (tx_ok != true)
+    	    	{
+    	    		osDelay(10);
+
+    	    	}
+
+    	tx_ok = false;
+    	str_sp = strlen(rx_msg);
+    	HAL_UART_Transmit_IT(&huart2, (uint8_t *)rx_msg, str_sp);
+
+    	while (tx_ok != true)
+    	    	{
+    	    		osDelay(10);
+
+    	    	}
+
+    	tx_ok = false;
     	rx_msg[0] = '\0';
-    }
-
-    else if (rx_msg[rx_inc] != '\0')
-    {
-    	rx_inc++;
+    	send = false;
 
     }
+
   }
   /* USER CODE END 5 */
 }
