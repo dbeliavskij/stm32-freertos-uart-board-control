@@ -58,7 +58,7 @@ const osMessageQueueAttr_t RxQueue_attributes = {
 /* USER CODE BEGIN PV */
 
 uint8_t rx_char;
-uint8_t tx_ok = 0;
+uint8_t tx_ok = 1;
 
 /* USER CODE END PV */
 
@@ -298,7 +298,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance == USART2)
   {
-
     osMessageQueuePut(RxQueueHandle, &rx_char, 1, 0);
 	HAL_UART_Receive_IT(&huart2, &rx_char, 1);
 
@@ -307,12 +306,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
-
 	if (huart->Instance == USART2)
 	{
 		tx_ok = 1;
-	}
 
+	}
 }
 
 
@@ -332,43 +330,69 @@ void StartUARTRx(void *argument)
   uint8_t temp_rx;
   char rx_msg[13] = { '\0' };
   int rx_inc = 0;
+  osStatus_t status;
   /* Infinite loop */
   for(;;)
   {
-    osMessageQueueGet(RxQueueHandle, &temp_rx, NULL, osWaitForever);
-    if (rx_inc <11)
+    status = osMessageQueueGet(RxQueueHandle, &temp_rx, NULL, 500);
+
+    if (status == osOK)
     {
+    	if (rx_inc <11)
+    	    {
+    	    	rx_msg[rx_inc] = (char)temp_rx;
 
-    	rx_msg[rx_inc] = (char)temp_rx;
+    	    }
 
+    	else
+    	    {
+    	    	rx_msg[11] = '\0';
+    	    	rx_msg[10] = '\r';
+    	    	rx_inc = 10;
+
+    	    }
     }
 
-    else
+    else if (status == osErrorTimeout && strlen(rx_msg) > 0)
     {
+    	if (rx_inc < 11) {
+    		rx_msg[rx_inc] = '\r';
+    		rx_msg[rx_inc+1] = '\0';
 
-    	rx_msg[11] = '\0';
-    	rx_msg[10] = '\r';
-    	rx_inc = 10;
-
-    }
-
-
-    if ((rx_msg[rx_inc] == '\r') || (rx_msg[rx_inc] == '\n')) {
-
-    	rx_inc = 0;
-    	strcat(rx_msg, "\n");
-    	HAL_UART_Transmit_IT(&huart2, (uint8_t *)rx_msg, 13);
-    	while (tx_ok != 1) {
-    		osDelay(10);
     	}
 
-    	rx_msg[0] = '\0';
-    	tx_ok = 0;
-    }
-    else {
-    	rx_inc++;
+    	else
+    	{
+	    	rx_msg[11] = '\0';
+	    	rx_msg[10] = '\r';
+	    	rx_inc = 10;
+    	}
+
     }
 
+
+
+    if ((rx_msg[rx_inc] == '\r') || (rx_msg[rx_inc] == '\n'))
+    {
+
+    	strcat(rx_msg, "\n");
+    	HAL_UART_Transmit_IT(&huart2, (uint8_t *)rx_msg, rx_inc+2);
+    	rx_inc = 0;
+    	while (tx_ok != 1)
+    	{
+    		osDelay(10);
+
+    	}
+
+    	tx_ok = 0;
+    	rx_msg[0] = '\0';
+    }
+
+    else if (rx_msg[rx_inc] != '\0')
+    {
+    	rx_inc++;
+
+    }
   }
   /* USER CODE END 5 */
 }
