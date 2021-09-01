@@ -51,15 +51,45 @@ const osThreadAttr_t UARTRx_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for TaskHandler */
+osThreadId_t TaskHandlerHandle;
+const osThreadAttr_t TaskHandler_attributes = {
+  .name = "TaskHandler",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityAboveNormal,
+};
+/* Definitions for ButTask */
+osThreadId_t ButTaskHandle;
+const osThreadAttr_t ButTask_attributes = {
+  .name = "ButTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityBelowNormal,
+};
+/* Definitions for LedBlinkTask */
+osThreadId_t LedBlinkTaskHandle;
+const osThreadAttr_t LedBlinkTask_attributes = {
+  .name = "LedBlinkTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityBelowNormal,
+};
 /* Definitions for RxQueue */
 osMessageQueueId_t RxQueueHandle;
 const osMessageQueueAttr_t RxQueue_attributes = {
   .name = "RxQueue"
 };
+/* Definitions for CommandQueue */
+osMessageQueueId_t CommandQueueHandle;
+const osMessageQueueAttr_t CommandQueue_attributes = {
+  .name = "CommandQueue"
+};
+/* Definitions for UARTTxSemaphore */
+osSemaphoreId_t UARTTxSemaphoreHandle;
+const osSemaphoreAttr_t UARTTxSemaphore_attributes = {
+  .name = "UARTTxSemaphore"
+};
 /* USER CODE BEGIN PV */
 
 uint8_t rx_char;
-bool tx_ok = false;
 
 /* USER CODE END PV */
 
@@ -68,6 +98,9 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 void StartUARTRx(void *argument);
+void StartTTaskHandler(void *argument);
+void StartButTask(void *argument);
+void StartLedBlinkTask(void *argument);
 
 static void MX_NVIC_Init(void);
 /* USER CODE BEGIN PFP */
@@ -124,6 +157,10 @@ int main(void)
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
 
+  /* Create the semaphores(s) */
+  /* creation of UARTTxSemaphore */
+  UARTTxSemaphoreHandle = osSemaphoreNew(1, 1, &UARTTxSemaphore_attributes);
+
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
@@ -136,6 +173,9 @@ int main(void)
   /* creation of RxQueue */
   RxQueueHandle = osMessageQueueNew (12, sizeof(uint8_t), &RxQueue_attributes);
 
+  /* creation of CommandQueue */
+  CommandQueueHandle = osMessageQueueNew (1, 13, &CommandQueue_attributes);
+
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
@@ -143,6 +183,15 @@ int main(void)
   /* Create the thread(s) */
   /* creation of UARTRx */
   UARTRxHandle = osThreadNew(StartUARTRx, NULL, &UARTRx_attributes);
+
+  /* creation of TaskHandler */
+  TaskHandlerHandle = osThreadNew(StartTTaskHandler, NULL, &TaskHandler_attributes);
+
+  /* creation of ButTask */
+  ButTaskHandle = osThreadNew(StartButTask, NULL, &ButTask_attributes);
+
+  /* creation of LedBlinkTask */
+  LedBlinkTaskHandle = osThreadNew(StartLedBlinkTask, NULL, &LedBlinkTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -309,7 +358,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if (huart->Instance == USART2)
 	{
-		tx_ok = true;
+		osSemaphoreRelease(UARTTxSemaphoreHandle);
 
 	}
 }
@@ -383,25 +432,13 @@ void StartUARTRx(void *argument)
 
     if (send)
     {
+    	osMessageQueuePut(CommandQueueHandle, rx_msg, 1, osWaitForever);
+    	osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
     	HAL_UART_Transmit_IT(&huart2, (uint8_t *)"Received command:\n\r", 19);
 
-    	while (tx_ok != true)
-    	    	{
-    	    		osDelay(10);
-
-    	    	}
-
-    	tx_ok = false;
     	str_sp = strlen(rx_msg);
+    	osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
     	HAL_UART_Transmit_IT(&huart2, (uint8_t *)rx_msg, str_sp);
-
-    	while (tx_ok != true)
-    	    	{
-    	    		osDelay(10);
-
-    	    	}
-
-    	tx_ok = false;
     	rx_msg[0] = '\0';
     	send = false;
 
@@ -409,6 +446,88 @@ void StartUARTRx(void *argument)
 
   }
   /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartTTaskHandler */
+/**
+* @brief Function implementing the TaskHandler thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTTaskHandler */
+void StartTTaskHandler(void *argument)
+{
+  /* USER CODE BEGIN StartTTaskHandler */
+  osThreadSuspend(ButTaskHandle);
+  osThreadSuspend(LedBlinkTaskHandle);
+
+  char command[13] = { '\0' };
+  /* Infinite loop */
+  for(;;)
+  {
+    osMessageQueueGet(CommandQueueHandle, command, NULL, osWaitForever);
+
+    if (!strncmp(command, "LED", 3) || !strncmp(command, "led", 3))
+    {
+    	osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+    	HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED command\n\r", 13);
+
+    	osThreadResume(LedBlinkTaskHandle);
+
+    }
+
+    else if (!strncmp(command, "BUT", 3) || !strncmp(command, "but", 3))
+    {
+    	osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+    	HAL_UART_Transmit_IT(&huart2, (uint8_t *)"BUT command\n\r", 15);
+
+    }
+
+    else
+    {
+    	osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+    	HAL_UART_Transmit_IT(&huart2, (uint8_t *)"Invalid command\n\r", 17);
+
+    }
+
+  }
+  /* USER CODE END StartTTaskHandler */
+}
+
+/* USER CODE BEGIN Header_StartButTask */
+/**
+* @brief Function implementing the ButTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartButTask */
+void StartButTask(void *argument)
+{
+  /* USER CODE BEGIN StartButTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartButTask */
+}
+
+/* USER CODE BEGIN Header_StartLedBlinkTask */
+/**
+* @brief Function implementing the LedBlinkTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartLedBlinkTask */
+void StartLedBlinkTask(void *argument)
+{
+  /* USER CODE BEGIN StartLedBlinkTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartLedBlinkTask */
 }
 
 /**
