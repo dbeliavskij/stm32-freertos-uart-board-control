@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 #include <string.h>
 #include <stdbool.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -462,6 +463,7 @@ void StartTTaskHandler(void *argument)
   osThreadSuspend(LedBlinkTaskHandle);
 
   char command[13] = { '\0' };
+  bool led_b_sus = true;
   /* Infinite loop */
   for(;;)
   {
@@ -469,10 +471,54 @@ void StartTTaskHandler(void *argument)
 
     if (!strncmp(command, "LED", 3) || !strncmp(command, "led", 3))
     {
-    	osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
-    	HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED command\n\r", 13);
 
-    	osThreadResume(LedBlinkTaskHandle);
+    	if (command[4] == 'b' && command[6] != '0')
+    	{
+    		if (led_b_sus)
+    		{
+
+    			osThreadResume(LedBlinkTaskHandle);
+    			led_b_sus = !led_b_sus;
+    			osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+    			HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED blinking task started\n\r", 27);
+
+    		}
+
+    		else
+    		{
+    			osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+    			HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED blinking task already running\n\r", 35);
+
+    		}
+    	}
+
+    	else if (command[4] == 'b' && command[6] == '0')
+    	{
+    		if (!led_b_sus)
+			{
+
+				osThreadSuspend(LedBlinkTaskHandle);
+				led_b_sus = !led_b_sus;
+				osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+				HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED blinking task stopped\n\r", 27);
+
+			}
+
+			else
+			{
+				osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+				HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED blinking task already stopped\n\r", 35);
+
+			}
+
+    	}
+
+    	else
+    	{
+    		osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+    		HAL_UART_Transmit_IT(&huart2, (uint8_t *)"Invalid command\n\r", 17);
+    	}
+
 
     }
 
