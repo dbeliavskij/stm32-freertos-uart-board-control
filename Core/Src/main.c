@@ -290,6 +290,9 @@ static void MX_NVIC_Init(void)
   /* USART2_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(USART2_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(USART2_IRQn);
+  /* EXTI15_10_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 }
 
 /**
@@ -381,7 +384,13 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 	}
 }
 
-
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	if(GPIO_Pin == B1_Pin)
+	{
+		osEventFlagsSet(ButEventsHandle, 0x00000004U);
+	}
+}
 
 /* USER CODE END 4 */
 
@@ -499,9 +508,9 @@ void StartTTaskHandler(void *argument)
     			led_b_sus = !led_b_sus;
     			osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
     			HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED blinking task started\n\r", 27);
-    			if (osEventFlagsWait(ButEventsHandle, 0x00000001U, osFlagsNoClear, 0) == 0x00000001U)
+    			if (osEventFlagsGet(ButEventsHandle) & 0x00000002U)
     			{
-    				osEventFlagsClear(ButEventsHandle, 0x00000001U);
+    				osEventFlagsClear(ButEventsHandle, 0x00000002U);
     				osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
     				HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED control with button turned off\n\r", 36);
 
@@ -622,7 +631,26 @@ void StartButTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+	switch (osEventFlagsWait(ButEventsHandle, 0x00000004U, osFlagsWaitAny, osWaitForever))
+	{
+		case 0x00000005U:
+			osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+			HAL_UART_Transmit_IT(&huart2, (uint8_t *)"Button pressed!\n\r", 17);
+			break;
+
+		case 0x00000006U:
+			HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+			break;
+
+		case 0x00000007U:
+			HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+			osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+			HAL_UART_Transmit_IT(&huart2, (uint8_t *)"Button pressed!\n\r", 17);
+
+		default:
+			break;
+
+	}
   }
   /* USER CODE END StartButTask */
 }
