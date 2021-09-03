@@ -83,6 +83,11 @@ osMessageQueueId_t CommandQueueHandle;
 const osMessageQueueAttr_t CommandQueue_attributes = {
   .name = "CommandQueue"
 };
+/* Definitions for b_rateQueue */
+osMessageQueueId_t b_rateQueueHandle;
+const osMessageQueueAttr_t b_rateQueue_attributes = {
+  .name = "b_rateQueue"
+};
 /* Definitions for UARTTxSemaphore */
 osSemaphoreId_t UARTTxSemaphoreHandle;
 const osSemaphoreAttr_t UARTTxSemaphore_attributes = {
@@ -176,6 +181,9 @@ int main(void)
 
   /* creation of CommandQueue */
   CommandQueueHandle = osMessageQueueNew (1, 13, &CommandQueue_attributes);
+
+  /* creation of b_rateQueue */
+  b_rateQueueHandle = osMessageQueueNew (1, sizeof(uint16_t), &b_rateQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -464,6 +472,7 @@ void StartTTaskHandler(void *argument)
 
   char command[13] = { '\0' };
   bool led_b_sus = true;
+  int temp_num;
   /* Infinite loop */
   for(;;)
   {
@@ -472,11 +481,10 @@ void StartTTaskHandler(void *argument)
     if (!strncmp(command, "LED", 3) || !strncmp(command, "led", 3))
     {
 
-    	if (command[4] == 'b' && command[6] != '0')
+    	if (command[4] == 'b' && atoi(command+6) > 0)
     	{
     		if (led_b_sus)
     		{
-
     			osThreadResume(LedBlinkTaskHandle);
     			led_b_sus = !led_b_sus;
     			osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
@@ -486,8 +494,10 @@ void StartTTaskHandler(void *argument)
 
     		else
     		{
+    			temp_num = atoi(command+6);
+    			osMessageQueuePut(b_rateQueueHandle, &temp_num, 1, osWaitForever);
     			osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
-    			HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED blinking task already running\n\r", 35);
+    			HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED blinking rate updated\n\r", 27);
 
     		}
     	}
@@ -568,10 +578,13 @@ void StartButTask(void *argument)
 void StartLedBlinkTask(void *argument)
 {
   /* USER CODE BEGIN StartLedBlinkTask */
+  int rate = 0;
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    osMessageQueueGet(b_rateQueueHandle, &rate, NULL, 0);
+    HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+    osDelay(rate);
   }
   /* USER CODE END StartLedBlinkTask */
 }
