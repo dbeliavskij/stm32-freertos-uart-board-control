@@ -457,7 +457,7 @@ void StartUARTRx(void *argument)
 
     }
 
-    if (send)
+    if (send && strlen(rx_msg) > 8)
     {
     	osMessageQueuePut(CommandQueueHandle, rx_msg, 1, osWaitForever);
     	osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
@@ -469,6 +469,17 @@ void StartUARTRx(void *argument)
     	rx_msg[0] = '\0';
     	send = false;
 
+    }
+
+    else if (send)
+    {
+    	osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+    	HAL_UART_Transmit_IT(&huart2, (uint8_t *)"Received command too short:\n\r", 29);
+    	str_sp = strlen(rx_msg);
+    	osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+    	HAL_UART_Transmit_IT(&huart2, (uint8_t *)rx_msg, str_sp);
+    	rx_msg[0] = '\0';
+    	send = false;
     }
 
   }
