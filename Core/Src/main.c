@@ -93,6 +93,11 @@ osSemaphoreId_t UARTTxSemaphoreHandle;
 const osSemaphoreAttr_t UARTTxSemaphore_attributes = {
   .name = "UARTTxSemaphore"
 };
+/* Definitions for ButEvents */
+osEventFlagsId_t ButEventsHandle;
+const osEventFlagsAttr_t ButEvents_attributes = {
+  .name = "ButEvents"
+};
 /* USER CODE BEGIN PV */
 
 uint8_t rx_char;
@@ -205,6 +210,10 @@ int main(void)
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
+
+  /* Create the event(s) */
+  /* creation of ButEvents */
+  ButEventsHandle = osEventFlagsNew(&ButEvents_attributes);
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
@@ -394,7 +403,7 @@ void StartUARTRx(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    status = osMessageQueueGet(RxQueueHandle, temp_rx, NULL, 500);
+    status = osMessageQueueGet(RxQueueHandle, temp_rx, NULL, 2000);
 
     if (status == osOK)
     {
@@ -467,7 +476,6 @@ void StartUARTRx(void *argument)
 void StartTTaskHandler(void *argument)
 {
   /* USER CODE BEGIN StartTTaskHandler */
-  osThreadSuspend(ButTaskHandle);
   osThreadSuspend(LedBlinkTaskHandle);
 
   char command[13] = { '\0' };
@@ -486,9 +494,18 @@ void StartTTaskHandler(void *argument)
     		if (led_b_sus)
     		{
     			osThreadResume(LedBlinkTaskHandle);
+    			temp_num = atoi(command+6);
+    			osMessageQueuePut(b_rateQueueHandle, &temp_num, 1, osWaitForever);
     			led_b_sus = !led_b_sus;
     			osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
     			HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED blinking task started\n\r", 27);
+    			if (osEventFlagsWait(ButEventsHandle, 0x00000001U, osFlagsNoClear, 0) == 0x00000001U)
+    			{
+    				osEventFlagsClear(ButEventsHandle, 0x00000001U);
+    				osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+    				HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED control with button turned off\n\r", 36);
+
+    			}
 
     		}
 
@@ -534,8 +551,50 @@ void StartTTaskHandler(void *argument)
 
     else if (!strncmp(command, "BUT", 3) || !strncmp(command, "but", 3))
     {
-    	osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
-    	HAL_UART_Transmit_IT(&huart2, (uint8_t *)"BUT command\n\r", 15);
+    	if (command[4] == 'r' || command[4] == 'R')
+    	{
+    		if (command[6] == '1')
+    		{
+    			osEventFlagsSet(ButEventsHandle, 0x00000001U);
+    			osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+    			HAL_UART_Transmit_IT(&huart2, (uint8_t *)"Button press notifications turned on\n\r", 38);
+
+    		}
+
+    		else
+    		{
+    			osEventFlagsClear(ButEventsHandle, 0x00000001U);
+    			osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+    			HAL_UART_Transmit_IT(&huart2, (uint8_t *)"Button press notifications turned off\n\r", 39);
+
+    		}
+    	}
+
+    		else if (command[4] == 'l' || command[4] == 'L')
+    		{
+    			if (command[6] == '1')
+				{
+					osEventFlagsSet(ButEventsHandle, 0x00000002U);
+					osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+					HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED control with button turned on\n\r", 35);
+
+					if (!led_b_sus)
+					{
+						osThreadSuspend(LedBlinkTaskHandle);
+						led_b_sus = !led_b_sus;
+						osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+						HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED blinking task stopped\n\r", 27);
+					}
+
+				}
+
+				else
+				{
+					osEventFlagsClear(ButEventsHandle, 0x00000002U);
+					osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+					HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED control with button turned off\n\r", 36);
+				}
+    		}
 
     }
 

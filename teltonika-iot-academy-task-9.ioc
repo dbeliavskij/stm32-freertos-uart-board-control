@@ -1,7 +1,8 @@
 #MicroXplorer Configuration settings - do not modify
 FREERTOS.BinarySemaphores01=UARTTxSemaphore,Dynamic,NULL
+FREERTOS.Events01=ButEvents,Dynamic,NULL
 FREERTOS.FootprintOK=true
-FREERTOS.IPParameters=Tasks01,Queues01,FootprintOK,BinarySemaphores01
+FREERTOS.IPParameters=Tasks01,Queues01,FootprintOK,BinarySemaphores01,Events01
 FREERTOS.Queues01=RxQueue,12,uint8_t,0,Dynamic,NULL,NULL;CommandQueue,1,13,1,Dynamic,NULL,NULL;b_rateQueue,1,uint16_t,0,Dynamic,NULL,NULL
 FREERTOS.Tasks01=UARTRx,24,128,StartUARTRx,Default,NULL,Dynamic,NULL,NULL;TaskHandler,32,128,StartTTaskHandler,Default,NULL,Dynamic,NULL,NULL;ButTask,16,128,StartButTask,Default,NULL,Dynamic,NULL,NULL;LedBlinkTask,16,128,StartLedBlinkTask,Default,NULL,Dynamic,NULL,NULL
 File.Version=6
