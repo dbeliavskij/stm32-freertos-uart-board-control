@@ -539,7 +539,7 @@ void StartTTaskHandler(void *argument)
     		}
     	}
 
-    	else if ((command[4] == 'b' || command[4] == 'B') && command[6] == '0')
+    	else if (command[4] == 'b' || command[4] == 'B')
     	{
     		if (!led_b_sus)
 			{
