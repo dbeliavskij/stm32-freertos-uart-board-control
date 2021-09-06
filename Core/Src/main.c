@@ -412,7 +412,7 @@ void StartUARTRx(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    status = osMessageQueueGet(RxQueueHandle, temp_rx, NULL, 2000);
+    status = osMessageQueueGet(RxQueueHandle, temp_rx, NULL, 500);
 
     if (status == osOK)
     {
