@@ -509,7 +509,7 @@ void StartTTaskHandler(void *argument)
     if (!strncmp(command, "LED", 3) || !strncmp(command, "led", 3))
     {
 
-    	if (command[4] == 'b' && atoi(command+6) > 0)
+    	if ((command[4] == 'b' || command[4] == 'B') && atoi(command+6) > 0)
     	{
     		if (led_b_sus)
     		{
@@ -539,7 +539,7 @@ void StartTTaskHandler(void *argument)
     		}
     	}
 
-    	else if (command[4] == 'b' && command[6] == '0')
+    	else if ((command[4] == 'b' || command[4] == 'B') && command[6] == '0')
     	{
     		if (!led_b_sus)
 			{
