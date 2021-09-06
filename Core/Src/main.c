@@ -560,6 +560,34 @@ void StartTTaskHandler(void *argument)
 
     	}
 
+    	else if (command[4] == 'u' || command[4] == 'U')
+    	{
+    		if (!led_b_sus)
+			{
+				osThreadSuspend(LedBlinkTaskHandle);
+				led_b_sus = !led_b_sus;
+				osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+				HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED blinking task stopped\n\r", 27);
+
+			}
+
+    		if (command[6] == '1')
+    		{
+    			osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+    			HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED turned on\n\r", 15);
+    			HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
+
+    		}
+
+    		else
+    		{
+    			osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
+				HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED turned off\n\r", 16);
+				HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+
+    		}
+    	}
+
     	else
     	{
     		osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
@@ -604,6 +632,7 @@ void StartTTaskHandler(void *argument)
 						led_b_sus = !led_b_sus;
 						osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
 						HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED blinking task stopped\n\r", 27);
+
 					}
 
 				}
@@ -613,6 +642,7 @@ void StartTTaskHandler(void *argument)
 					osEventFlagsClear(ButEventsHandle, 0x00000002U);
 					osSemaphoreAcquire(UARTTxSemaphoreHandle, osWaitForever);
 					HAL_UART_Transmit_IT(&huart2, (uint8_t *)"LED control with button turned off\n\r", 36);
+
 				}
     		}
 
